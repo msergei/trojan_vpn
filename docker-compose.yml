@@ -1,0 +1,39 @@
+version: '3'
+
+volumes:
+  letsencrypt: {}
+  cerbot: {}
+
+services:
+  trojan:
+    image: p4gefau1t/trojan
+    restart: always
+    ports:
+      - 443:443/tcp  # Открываем порт 443 для VPN
+    volumes:
+      - ./config.json:/config/config.json  # Конфигурация Trojan
+      - letsencrypt:/etc/letsencrypt  # Монтируем сертификаты
+    depends_on:
+      - certbot  # Trojan будет ждать, пока Certbot завершит установку сертификатов
+
+  certbot:
+    image: certbot/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --webroot -w /var/www/certbot/; sleep 12h; done;'"
+    volumes:
+      - letsencrypt:/etc/letsencrypt  # Сертификаты будут сохраняться здесь
+      - certbot:/var/www/certbot  # Для верификации домена
+    environment:
+      - CERTBOT_EMAIL=cypserg@gmail.com  # Укажите свой email
+      - CERTBOT_DOMAIN=test.jpho.ru  # Укажите домен для сертификатов
+    networks:
+      - web
+    restart: always
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    volumes:
+      - certbot:/var/www/certbot  # Для HTTP верификации Certbot
+      - ./nginx.conf:/etc/nginx/nginx.conf  # Конфигурация Nginx
+    ports:
+      - "80:80"  # Nginx будет обрабатывать HTTP-запросы для верификации Certbot
